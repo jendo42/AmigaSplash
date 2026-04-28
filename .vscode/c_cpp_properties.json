@@ -1,0 +1,59 @@
+{
+    "configurations": [
+        {
+            "name": "AmigaOS 1.3 GCC",
+            "includePath": [
+                "${workspaceFolder}/include/*",
+                "${workspaceFolder}/.build/*"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__GNU_VISIBLE=1"
+            ],
+            "compilerPath": "${AMIGAOS_NDK}/../bin/m68k-amigaos-gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-arm",
+            "compilerArgs": [
+                "-mcrt=nix13",
+                "-I${workspaceFolder}/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "AmigaOS 2.0 GCC",
+            "includePath": [
+                "${workspaceFolder}/include/*",
+                "${workspaceFolder}/.build/*"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__GNU_VISIBLE=1"
+            ],
+            "compilerPath": "${AMIGAOS_NDK}/../bin/m68k-amigaos-gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-arm",
+            "compilerArgs": [
+                "-mcrt=nix20",
+                "-I${workspaceFolder}/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
