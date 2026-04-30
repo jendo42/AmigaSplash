@@ -50,6 +50,7 @@ CPPFLAGS := \
 	-Wno-error=unused-function \
 	-Wno-error=unused-parameter \
 	-Wno-error=unused-variable \
+	-Wno-error=unused-but-set-variable \
 	-Wno-missing-field-initializers \
 	-Wno-strict-aliasing \
 	-Wno-pointer-sign \
