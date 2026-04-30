@@ -6,5 +6,3 @@
 	#include <stdio.h>
 	#define LOG_DEBUG(x, ...) printf("DEBUG: " x "\n", ##__VA_ARGS__)
 #endif
-
-#define YESNO(x) ((x) ? "YES" : "NO")

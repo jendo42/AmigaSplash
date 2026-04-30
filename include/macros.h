@@ -7,3 +7,4 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define countof(x) (sizeof(x) / sizeof(x[0]))
+#define YESNO(x) ((x) ? "YES" : "NO")

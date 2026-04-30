@@ -35,6 +35,7 @@
 #include "player.h"
 #include "log.h"
 #include "wav.h"
+#include "macros.h"
 
 #include "test_image.h"
 
@@ -121,6 +122,8 @@ int main(int argc, char *argv[])
 	if (!sys_init()) {
 		return ERROR_INVALID_RESIDENT_LIBRARY;
 	}
+
+	LOG_DEBUG("amiga-splash ver. %s", XSTR(GIT_VERSION));
 
 	// to minimize flicker
 	Forbid();
