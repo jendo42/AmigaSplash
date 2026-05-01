@@ -1,5 +1,5 @@
 # project setup
-PROJ = amiga-splash
+PROJ = AmigaSplash
 BUILD_DIR = .build
 SRC_DIR = src
 INCLUDE_DIR = include
