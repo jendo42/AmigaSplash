@@ -190,15 +190,8 @@ int main(int argc, char *argv[])
 
 	bool aga_present = sys_isaga();
 	bool im_lace = image.Height > 256;
+	bool im_ntsc = GfxBase->DisplayFlags & NTSC;
 
-	int swh = 320;
-	int shh = im_lace ? 256 : 128;
-
-	int scr_ntsc = 0;
-	if (GfxBase->DisplayFlags & NTSC) {
-		scr_ntsc = im_lace ? 56 : 28;
-	}
-	
 	uint32_t modeNormal = imageInfo.isham ? HAM_KEY : HIRES_KEY;
 	uint32_t modeLaced = imageInfo.isham ? HAMLACE_KEY : HIRESLACE_KEY;
 	uint32_t displayId = im_lace ? modeLaced : modeNormal;
@@ -207,12 +200,19 @@ int main(int argc, char *argv[])
 		type |= HAM;
 	}
 
-	LOG_DEBUG("AGA: %s; LACED: %s; NTSC: %s; HAM: %s", YESNO(aga_present), YESNO(im_lace), YESNO(scr_ntsc), YESNO(imageInfo.isham));
+	int swh = imageInfo.isham ? 160 : 320;
+	int shh = im_lace ? 256 : 128;
+	if (im_ntsc) {
+		shh -= (im_lace ? 56 : 28);
+	}
+
+	LOG_DEBUG("AGA: %s; LACED: %s; NTSC: %s; HAM: %s", YESNO(aga_present), YESNO(im_lace), YESNO(im_ntsc), YESNO(imageInfo.isham));
+	LOG_DEBUG("Screen size: %ux%u", swh * 2, shh * 2);
 
 	// create screen for splash, force all colors to black
 	scr = OpenScreenTags(NULL,
 		SA_Left, swh - (image.Width / 2),
-		SA_Top, shh - (image.Height / 2) - scr_ntsc,
+		SA_Top, shh - (image.Height / 2),
 		SA_Width, image.Width,
 		SA_Height, image.Height,
 		SA_Depth, image.Depth,
@@ -261,11 +261,22 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
+	if (imageInfo.isham) {
+		// for HAM we need to just load the palette
+		// fading will be turned off
+		// NOTE: if you want border color black,
+		// you need to make sure that the zeroth color
+		// register is set to black color
+		LoadRGB4(&scr->ViewPort, cmap, cmap_size);
+	}
+
 	SetPointer(mywin, sprite_data, 0, 0, 0, 0);
 	DrawImage(mywin->RPort, &image, 0, 0);
 	ActivateWindow(mywin);
 	if (!imageInfo.isham) {
 		fade(scr, 64, cmap, cmap_size, false);
+	} else {
+		Delay(64);
 	}
 
 	// program main loop
@@ -333,6 +344,8 @@ int main(int argc, char *argv[])
 	// fade out
 	if (!imageInfo.isham) {
 		fade(scr, 64, cmap, cmap_size, true);
+	} else {
+		Delay(64);
 	}
 
 	// switch to WB screen and fade in
