@@ -280,10 +280,11 @@ int main(int argc, char *argv[])
 	}
 
 	// program main loop
-	uint32_t timer = 0;
+	uint16_t timer = 10;
 	struct IntuiMessage *msg;
 	uint32_t signalMask = (1UL << mywin->UserPort->mp_SigBit) | SIGBREAKF_CTRL_C;
 	bool run = true;
+	bool rexit = false;
 	do {
 		if (Wait(signalMask) & SIGBREAKF_CTRL_C) {
 			LOG_DEBUG("Exit by: Signal");
@@ -296,41 +297,45 @@ int main(int argc, char *argv[])
 					if (msg->Code == 0x45) {
 						// ESC key press
 						LOG_DEBUG("Exit by: ESC");
-						run = false;
+						rexit = true;
 					}
 					break;
 				case IDCMP_NEWPREFS:
 					LOG_DEBUG("Exit by: IDCMP_NEWPREFS");
-					run = false;
+					rexit = true;
 					break;
 				case IDCMP_NEWSIZE:
 					LOG_DEBUG("Exit by: IDCMP_NEWSIZE");
 					// redraw image to center
 					//QueryOverscan(displayId, &rect, OSCAN_STANDARD);
 					//ScreenPosition(scr, SPOS_ABSOLUTE, rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
-					run = false;
+					rexit = true;
 					break;
 				case IDCMP_CLOSEWINDOW:
 					LOG_DEBUG("Exit by: IDCMP_CLOSEWINDOW");
-					run = false;
+					rexit = true;
 					break;
 				case IDCMP_INACTIVEWINDOW:
 					LOG_DEBUG("Exit by: IDCMP_INACTIVEWINDOW");
-					run = false;
+					rexit = true;
 					break;
 				case IDCMP_INTUITICKS:
-					if (timer > 15) {
-						if (!hasfocus(scr)) {
-							LOG_DEBUG("Exit by: screen change");
-							run = false;
-						}
-					} else {
-						timer++;
+					if (timer) {
+						--timer;
+					}
+					if (!hasfocus(scr)) {
+						LOG_DEBUG("Exit by: screen change");
+						rexit = true;
 					}
 					break;
 			}
 			ReplyMsg((struct Message *)msg);
 		}
+
+		if (!timer && rexit) {
+			run = false;
+		}
+
 	} while (run);
 
 	// start the jingle if available
