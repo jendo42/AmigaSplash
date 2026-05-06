@@ -6,6 +6,9 @@
 #include <proto/graphics.h>
 #include <intuition/intuition.h>
 
+#include <hardware/custom.h>
+#include <hardware/cia.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,6 +21,9 @@ extern uint32_t __commandlen;
 extern char *__commandline;
 
 extern struct WBStartup *_WBenchMsg;
+
+extern struct Custom custom;
+extern struct CIA ciaa;
 
 // Disable command line parsing
 // argv and argc are null now
@@ -144,15 +150,65 @@ void sys_cleanup()
 	}
 }
 
+const char *sys_commandline()
+{
+	return g_commandline.data;
+}
+
 bool sys_isaga()
 {
-    if (GfxBase->LibNode.lib_Version >= 39) {
-        if (GfxBase->ChipRevBits0 & GFXF_AA_ALICE) {
-            return true;
-        }
-    }
+	if (GfxBase->LibNode.lib_Version >= 39) {
+		if (GfxBase->ChipRevBits0 & GFXF_AA_ALICE) {
+			return true;
+		}
+	}
 
-    return false;
+	return false;
+}
+
+
+bool sys_isdisabled()
+{
+	return SysBase->IDNestCnt >= 0;
+}
+
+bool sys_isforbidden()
+{
+	return SysBase->TDNestCnt >= 0;
+}
+
+void sys_setfilter(bool enabled)
+{
+	/* 1. Stop the OS task scheduler and hardware interrupts.
+		  This prevents the floppy drive driver from corrupting our Read-Modify-Write! */
+	Disable();
+
+	if (enabled) {
+		/* 2. Clear Bit 1 to '0' using bitwise AND with a NOT mask.
+			This enables the audio filter and BRIGHTENS the Power LED! */
+		ciaa.ciapra &= ~0x02;
+	} else {
+		/* 2. Set Bit 1 to '1' using bitwise OR.
+			This disables the audio filter and DIMS the Power LED! */
+		ciaa.ciapra |= 0x02;
+	}
+
+	/* 3. Give the CPU back to the OS */
+	Enable();
+}
+
+void sys_vblank()
+{
+	/* 2. Wait until we are OUT of the Vertical Blank (if we are currently in it)
+		  We read the combined 32-bit vposr/vhposr register. */
+	while (*(volatile ULONG *)&custom.vposr & 0x00000100) {
+		/* Busy wait... */
+	}
+
+	/* 3. Wait until we ENTER the next Vertical Blank */
+	while (!(*(volatile ULONG *)&custom.vposr & 0x00000100)) {
+		/* Busy wait... */
+	}
 }
 
 uint32_t sys_getpath(BPTR lock, buffer_t *buffer)

@@ -138,18 +138,22 @@ bool WAV_LoadFile(const char *filename, struct WavInfo *info)
 		}
 	}
 
-	//if (strncmp(chunk.id, "data", 4)) {
-	//	LOG_DEBUG("WAV_LoadFile: no data (%.4s)", chunk.id);
-	//	goto cleanup;
-	//}
+	if (strncmp(chunk.id, "data", 4)) {
+		LOG_DEBUG("WAV_LoadFile: no data (%.4s)", chunk.id);
+		goto cleanup;
+	}
 
 	data = AllocMem(chunk.size, deinterleave ? 0 : MEMF_CHIP);
 	if (!data) {
+		LOG_DEBUG("WAV_LoadFile: not enough memory for data (%u)", chunk.size);
 		goto cleanup;
 	}
 
 	// load all PCM data to memory
-	Read(fileLock, data, chunk.size);
+	if (Read(fileLock, data, chunk.size) != (int32_t)chunk.size) {
+		LOG_DEBUG("WAV_LoadFile: failed to load data (%u)", chunk.size);
+		goto cleanup;
+	}
 
 	// apply the unsigned -> signed conversion
 	WAV_Unsigned2Signed(data, chunk.size);
@@ -159,18 +163,20 @@ bool WAV_LoadFile(const char *filename, struct WavInfo *info)
 		info->size = frames;
 		info->left = AllocMem(frames, MEMF_CHIP);
 		if (!info->left) {
+			LOG_DEBUG("WAV_LoadFile: not enough chipmem for left deinterleaved data (%u)", frames);
 			goto cleanup;
 		}
 
 		info->right = AllocMem(frames, MEMF_CHIP);
 		if (!info->right) {
+			LOG_DEBUG("WAV_LoadFile: not enough chipmem for right deinterleaved data (%u)", frames);
 			goto cleanup;
 		}
 
 		WAV_Deinterleave(data, info->left, info->right, frames);
 	} else {
 		info->left = data;
-		info->right = NULL;
+		info->right = data;
 		info->size = chunk.size;
 		data = NULL;
 	}
@@ -180,7 +186,6 @@ bool WAV_LoadFile(const char *filename, struct WavInfo *info)
 
 cleanup:
 	if (data) {
-		LOG_DEBUG("WAV_LoadFile: data not needed anymore");
 		if (data == info->left) {
 			info->left = NULL;
 		}
@@ -201,7 +206,7 @@ void WAV_Cleanup(struct WavInfo *info)
 	if (info->left) {
 		FreeMem(info->left, info->size);
 	}
-	if (info->right) {
+	if (info->right && info->right != info->left) {
 		FreeMem(info->right, info->size);
 	}
 	memset(info, 0, sizeof(*info));

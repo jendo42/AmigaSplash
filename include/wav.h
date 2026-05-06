@@ -29,9 +29,9 @@ typedef struct WAVEFORMATEXTENSIBLE {
 		uint16_t wSamplesPerBlock;
 		uint16_t wReserved;
 	} Samples;
-	uint32_t        dwChannelMask;
-	GUID         SubFormat;
-}  *PWAVEFORMATEXTENSIBLE;
+	uint32_t dwChannelMask;
+	GUID SubFormat;
+} *PWAVEFORMATEXTENSIBLE;
 
 struct WavChunkHeader
 {

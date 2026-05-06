@@ -16,15 +16,15 @@
 
 /* The standard IFF ILBM Bitmap Header Structure */
 struct BitMapHeader {
-    UWORD w, h;             /* Width and Height */
-    WORD  x, y;             /* X and Y offsets */
-    UBYTE nPlanes;          /* Number of bitplanes (depth) */
-    UBYTE masking;          /* Masking type */
-    UBYTE compression;      /* 0 = None, 1 = ByteRun1 */
-    UBYTE pad1;             /* Padding */
-    UWORD transparentColor; /* Transparent color index */
-    UBYTE xAspect, yAspect; /* Pixel aspect ratio */
-    WORD  pageWidth, pageHeight;
+	UWORD w, h;             /* Width and Height */
+	WORD  x, y;             /* X and Y offsets */
+	UBYTE nPlanes;          /* Number of bitplanes (depth) */
+	UBYTE masking;          /* Masking type */
+	UBYTE compression;      /* 0 = None, 1 = ByteRun1 */
+	UBYTE pad1;             /* Padding */
+	UWORD transparentColor; /* Transparent color index */
+	UBYTE xAspect, yAspect; /* Pixel aspect ratio */
+	WORD  pageWidth, pageHeight;
 };
 
 struct ImageInfo {

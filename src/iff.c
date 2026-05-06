@@ -186,21 +186,21 @@ void IFF_DeInterleave(struct ImageInfo *image)
 	BYTE *interleavedSource = (BYTE *)image->bitmap;
 	BYTE *planarDest = AllocMem(image->bmsize, MEMF_CHIP);
 	LONG bytesPerRow = ((image->header.w + 15) / 16) * 2;
-    LONG planeSize = bytesPerRow * height;
-    
-    for (WORD row = 0; row < height; row++) {
-        for (WORD plane = 0; plane < depth; plane++) {
-            
-            /* Calculate where to read from the IFF buffer */
-            LONG sourceOffset = (row * depth * bytesPerRow) + (plane * bytesPerRow);
-            
-            /* Calculate where to write in the strict planar buffer */
-            LONG destOffset = (plane * planeSize) + (row * bytesPerRow);
-            
-            /* Copy the row! (In production, use the Blitter or CopyMem for speed) */
-            CopyMem(&interleavedSource[sourceOffset], &planarDest[destOffset], bytesPerRow);
-        }
-    }
+	LONG planeSize = bytesPerRow * height;
+
+	for (WORD row = 0; row < height; row++) {
+		for (WORD plane = 0; plane < depth; plane++) {
+
+			/* Calculate where to read from the IFF buffer */
+			LONG sourceOffset = (row * depth * bytesPerRow) + (plane * bytesPerRow);
+
+			/* Calculate where to write in the strict planar buffer */
+			LONG destOffset = (plane * planeSize) + (row * bytesPerRow);
+
+			/* Copy the row! (In production, use the Blitter or CopyMem for speed) */
+			CopyMem(&interleavedSource[sourceOffset], &planarDest[destOffset], bytesPerRow);
+		}
+	}
 
 	FreeMem(image->bitmap, image->bmsize);
 	image->bitmap = (UWORD *)planarDest;

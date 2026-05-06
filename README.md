@@ -8,17 +8,20 @@ This simple tool is indended to show splash screen during boot process from HDD.
 
 ## Operation
  - Loads assets from disk (`S:splash.iff` and `S:splash.wav`)
- - Fade in the splash image
- - Waits for the system to create default workbench screen
- - Plays the `splash.wav`.
+ - Fade in the splash image (`S:splash.iff`)
+ - Waits for the system to create default workbench screen (mostly splash window loses focus)
+ - Plays the splash sound (`S:splash.wav`)
  - Fades out the splash image
+ - Fades the workbench in
  - Waits for audio to finish
  - Exits
 
 Note: program can be also exited by pressing ESC on keyboard.
 
 ## Installation
-Just put the `AmigaSplash` somewhere into your system (e.g. `C:`) and then add following line into `S:startup-sequence`
+Just copy the `AmigaSplash` somewhere into your system (e.g. `C:`) and then in the beginning of `S:startup-sequence` insert this line:
 ```
-Run >NIL: C:AmigaSplash
+Run >NIL: C:AmigaSplash >RAM:splash.log
 ```
+
+Program can be run with one parameter `C:AmigaSplash signal`. This will just find the running AmigaSplash task in the memory and sends break C signal into it. This makes possible to trigger end of the 'loading' by adding anywhere into `startup-sequence`.

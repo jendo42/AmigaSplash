@@ -27,9 +27,6 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 
-#include <hardware/custom.h>
-#include <hardware/cia.h>
-
 #include "system.h"
 #include "iff.h"
 #include "player.h"
@@ -37,59 +34,41 @@
 #include "wav.h"
 #include "macros.h"
 
-#include "test_image.h"
-
-extern struct Custom custom;
-extern struct CIA ciaa;
+#define LOG(x) Write(Output(), x "\n", sizeof(x))
 
 uint16_t __chip sprite_data[] = {
 	0x0000, 0x0000,
 	0x0000, 0x0000
 };
 
-void vblankDirect()
+struct ColorSpec colors_zero[33] = { 0 };
+
+
+// NOTE: there is no need to call the intuition locks,
+// because whole program is running in Disable()
+// ULONG lock = LockIBase(0);
+// ...
+// UnlockIBase(lock);
+uint16_t screenscnt()
 {
-	/* 2. Wait until we are OUT of the Vertical Blank (if we are currently in it) 
-		  We read the combined 32-bit vposr/vhposr register. */
-	while (*(volatile ULONG *)&custom.vposr & 0x00000100) {
-		/* Busy wait... */
+	uint16_t cnt = 0;
+	struct Screen * scr = IntuitionBase->FirstScreen;
+	while (scr) {
+		cnt++;
+		scr = scr->NextScreen;
 	}
 
-	/* 3. Wait until we ENTER the next Vertical Blank */
-	while (!(*(volatile ULONG *)&custom.vposr & 0x00000100)) {
-		/* Busy wait... */
-	}
+	return cnt;
 }
 
-void DisableAudioFilter(void)
+bool hasfocus(struct Screen *scr)
 {
-	/* 1. Stop the OS task scheduler and hardware interrupts.
-		  This prevents the floppy drive driver from corrupting our Read-Modify-Write! */
-	Disable();
-
-	/* 2. Set Bit 1 to '1' using bitwise OR.
-		  This disables the audio filter and DIMS the Power LED! */
-	ciaa.ciapra |= 0x02;
-
-	/* 3. Give the CPU back to the OS */
-	//Enable();
-}
-
-void EnableAudioFilter(void)
-{
-	Disable();
-
-	/* 2. Clear Bit 1 to '0' using bitwise AND with a NOT mask.
-		  This enables the audio filter and BRIGHTENS the Power LED! */
-	ciaa.ciapra &= ~0x02;
-
-	//Enable();
+	bool result = IntuitionBase->FirstScreen == scr;
+	return result;
 }
 
 void fade(struct Screen *scr, const uint16_t totalTicks, uint16_t *cmap, const uint16_t cmap_count, bool fadeOut)
 {
-	Forbid();
-	Disable();
 	uint16_t tick = fadeOut ? totalTicks : 0;
 	uint16_t temp[cmap_count];
 	while (fadeOut ? tick-- : tick++ < totalTicks) {
@@ -103,7 +82,7 @@ void fade(struct Screen *scr, const uint16_t totalTicks, uint16_t *cmap, const u
 			b = tick * b / totalTicks;
 			*p = (r << 8) | (g << 4) | (b << 0);
 		}
-		vblankDirect();
+		sys_vblank();
 		LoadRGB4(&scr->ViewPort, temp, cmap_count);
 	}
 }
@@ -113,25 +92,57 @@ int main(int argc, char *argv[])
 	struct Playback playback = {0};
 	struct Window *mywin = NULL;
 	struct Screen *scr = NULL;
-	struct Screen *wbScreen = IntuitionBase->FirstScreen;
+	struct Screen *wbScreen = NULL;
+	struct Screen *wbScreenLock = NULL;
+	bool filterDisabled = false;
 	const uint16_t cmap_zero[64] = { 0 };
 	uint16_t cmap[64] = { 0 };
 
 	(void)argc, (void)argv;
 
-	if (!sys_init()) {
+	LOG("amiga-splash " XSTR(GIT_VERSION));
+
+	if (SysBase->LibNode.lib_Version < 36) {
+		LOG("This program requires OS 2.0+");
 		return ERROR_INVALID_RESIDENT_LIBRARY;
 	}
 
-	LOG_DEBUG("amiga-splash ver. %s", XSTR(GIT_VERSION));
+	if (!sys_init()) {
+		LOG("Failed to init the program, maybe not enough memory?");
+		return ERROR_INVALID_RESIDENT_LIBRARY;
+	}
 
-	// to minimize flicker
+	// If this program run, disable interrupts to minimize flicker
 	Forbid();
 	Disable();
 
+	// send signal to existing AmigaSplash program to close it
+	if (strstr(sys_commandline(), "signal")) {
+		struct Task *targetTask = FindTask("AmigaSplash");
+		if (targetTask) {
+			Signal(targetTask, SIGBREAKF_CTRL_C);
+		}
+
+		Enable();
+		Permit();
+		sys_cleanup();
+		return 0;
+	}
+
+	{ // rename self task
+		struct Task *me = FindTask(NULL);
+		me->tc_Node.ln_Name = "AmigaSplash";
+	}
+
+	// initialize empty color table
+	colors_zero[32].ColorIndex = -1;
+	for (uint16_t i = 0; i < 32; i++) {
+		colors_zero[i].ColorIndex = i;
+	}
+
 	struct ImageInfo imageInfo = {0};
 	if (!IFF_LoadImage("S:splash.iff", &imageInfo)) {
-		LOG_DEBUG("No splash image.");
+		LOG("No splash image.");
 		goto end;
 	}
 
@@ -139,7 +150,10 @@ int main(int argc, char *argv[])
 
 	struct WavInfo wavInfo = {0};
 	if (WAV_LoadFile("S:splash.wav", &wavInfo)) {
+		filterDisabled = wavInfo.rate > 11025;
 		LOG_DEBUG("Got sound at (%X,%X) of size %u; %u Hz", (uint32_t)wavInfo.left, (uint32_t)wavInfo.right, wavInfo.size, wavInfo.rate);
+	} else {
+		LOG("No sound file.");
 	}
 
 	struct Image image = {
@@ -179,7 +193,6 @@ int main(int argc, char *argv[])
 
 	int swh = 320;
 	int shh = im_lace ? 256 : 128;
-	struct Rectangle clip = { 0, 0, swh * 2 - 1, shh * 2 - 1};
 
 	int scr_ntsc = 0;
 	if (GfxBase->DisplayFlags & NTSC) {
@@ -196,17 +209,7 @@ int main(int argc, char *argv[])
 
 	LOG_DEBUG("AGA: %s; LACED: %s; NTSC: %s; HAM: %s", YESNO(aga_present), YESNO(im_lace), YESNO(scr_ntsc), YESNO(imageInfo.isham));
 
-	if (!wbScreen) {
-		wbScreen = LockPubScreen(NULL);
-	}
-
-	if (wbScreen) {
-		vblankDirect();
-		LoadRGB4(&wbScreen->ViewPort, (UWORD *)cmap_zero, 32);
-		MakeScreen(wbScreen);
-		RethinkDisplay();
-	}
-
+	// create screen for splash, force all colors to black
 	scr = OpenScreenTags(NULL,
 		SA_Left, swh - (image.Width / 2),
 		SA_Top, shh - (image.Height / 2) - scr_ntsc,
@@ -219,8 +222,8 @@ int main(int argc, char *argv[])
 		SA_Type, type,
 		SA_DisplayID, displayId,
 		SA_Draggable, FALSE,
-		SA_Behind, TRUE,
-		SA_DClip, (uint32_t)&clip,
+		SA_Colors, (uint32_t)colors_zero,
+		SA_Exclusive, TRUE,
 		TAG_DONE
 	);
 
@@ -229,9 +232,18 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	// zero the palette for the new screen immediately
-	LoadRGB4(&scr->ViewPort, cmap_zero, 32);
-	vblankDirect();
+	// create workbench screen behind the splash screen
+	wbScreen = OpenScreenTags(NULL,
+		SA_Type, WBENCHSCREEN,
+		SA_Title, (uint32_t)"Workbench",
+		SA_PubName, (uint32_t)"Workbench",
+		SA_Behind, TRUE,
+		SA_LikeWorkbench, TRUE,
+		TAG_DONE
+	);
+
+	// lock the wb screen to prevent changing order
+	wbScreenLock = LockPubScreen(NULL);
 
 	mywin = OpenWindowTags(NULL,
 		WA_Left, 0,
@@ -249,50 +261,60 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	// hide pointer
 	SetPointer(mywin, sprite_data, 0, 0, 0, 0);
-
-	// draw the image
 	DrawImage(mywin->RPort, &image, 0, 0);
-
-	vblankDirect();
-	ScreenToFront(scr);
 	ActivateWindow(mywin);
-
-	vblankDirect();
-	fade(scr, 64, cmap, cmap_size, false);
+	if (!imageInfo.isham) {
+		fade(scr, 64, cmap, cmap_size, false);
+	}
 
 	// program main loop
+	uint32_t timer = 0;
 	struct IntuiMessage *msg;
-	struct Rectangle rect;
-	uint32_t signalMask = 1UL << mywin->UserPort->mp_SigBit;
+	uint32_t signalMask = (1UL << mywin->UserPort->mp_SigBit) | SIGBREAKF_CTRL_C;
 	bool run = true;
 	do {
-		Wait(signalMask);
+		if (Wait(signalMask) & SIGBREAKF_CTRL_C) {
+			LOG_DEBUG("Exit by: Signal");
+			run = false;
+			break;
+		}
 		while ((msg = (struct IntuiMessage *)GetMsg(mywin->UserPort))) {
 			switch (msg->Class) {
 				case IDCMP_RAWKEY:
 					if (msg->Code == 0x45) {
 						// ESC key press
+						LOG_DEBUG("Exit by: ESC");
 						run = false;
 					}
 					break;
 				case IDCMP_NEWPREFS:
-					LOG_DEBUG("IDCMP_NEWPREFS");
+					LOG_DEBUG("Exit by: IDCMP_NEWPREFS");
+					run = false;
 					break;
 				case IDCMP_NEWSIZE:
-					LOG_DEBUG("IDCMP_NEWSIZE");
+					LOG_DEBUG("Exit by: IDCMP_NEWSIZE");
 					// redraw image to center
 					//QueryOverscan(displayId, &rect, OSCAN_STANDARD);
 					//ScreenPosition(scr, SPOS_ABSOLUTE, rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
+					run = false;
 					break;
 				case IDCMP_CLOSEWINDOW:
+					LOG_DEBUG("Exit by: IDCMP_CLOSEWINDOW");
+					run = false;
+					break;
 				case IDCMP_INACTIVEWINDOW:
+					LOG_DEBUG("Exit by: IDCMP_INACTIVEWINDOW");
 					run = false;
 					break;
 				case IDCMP_INTUITICKS:
-					if (IntuitionBase->FirstScreen != scr) {
-						run = false;
+					if (timer > 15) {
+						if (!hasfocus(scr)) {
+							LOG_DEBUG("Exit by: screen change");
+							run = false;
+						}
+					} else {
+						timer++;
 					}
 					break;
 			}
@@ -300,15 +322,37 @@ int main(int argc, char *argv[])
 		}
 	} while (run);
 
+	// start the jingle if available
 	if (wavInfo.size) {
-		//DisableAudioFilter();
+		if (filterDisabled) {
+			sys_setfilter(false);
+		}
 		PL_StartStereoPCM(&playback, wavInfo.left, wavInfo.right ? wavInfo.right : wavInfo.left, wavInfo.size, wavInfo.rate);
 	}
 
-	ScreenToFront(scr);
-	fade(scr, 64, cmap, cmap_size, true);
+	// fade out
+	if (!imageInfo.isham) {
+		fade(scr, 64, cmap, cmap_size, true);
+	}
+
+	// switch to WB screen and fade in
+	if (wbScreen) {
+		// save the original palette
+		uint16_t cmap_wb[64] = { 0 };
+		for (uint16_t i = wbScreen->ViewPort.ColorMap->Count, *src = (uint16_t *)wbScreen->ViewPort.ColorMap->ColorTable, *dst = cmap_wb; i; i--) {
+			*dst++ = *src++;
+		}
+
+		// make it black
+		LoadRGB4(&wbScreen->ViewPort, cmap_zero, wbScreen->ViewPort.ColorMap->Count);
+
+		sys_vblank();
+		ScreenToFront(wbScreen);
+		fade(wbScreen, 64, cmap_wb, wbScreen->ViewPort.ColorMap->Count, false);
+	}
 
 end:
+	// interrupts can be enabled now
 	Enable();
 	Permit();
 
@@ -319,15 +363,21 @@ end:
 	}
 	if (scr) {
 		CloseScreen(scr);
-	}	
+	}
+	if (wbScreenLock){
+		UnlockPubScreen(NULL, wbScreenLock);
+	}
 	if (wbScreen) {
-		UnlockPubScreen("Workbench", wbScreen);
+		CloseScreen(wbScreen);
 	}
 	if (wavInfo.size) {
 		LOG_DEBUG("Waiting for sound to end...");
 		PL_WaitForPlayback(&playback);
+		if (filterDisabled) {
+			sys_setfilter(true);
+		}
+
 		PL_CleanupPlayback(&playback);
-		//EnableAudioFilter();
 		WAV_Cleanup(&wavInfo);
 	}
 	sys_cleanup();
