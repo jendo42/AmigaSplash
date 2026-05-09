@@ -26,6 +26,8 @@
 #include <proto/iffparse.h>
 #include <proto/exec.h>
 #include <proto/dos.h>
+#include <exec/interrupts.h>
+#include <hardware/intbits.h>
 
 #include "system.h"
 #include "iff.h"
@@ -42,7 +44,9 @@ uint16_t __chip sprite_data[] = {
 };
 
 struct ColorSpec colors_zero[33] = { 0 };
-
+struct Interrupt VBlankInterrupt;
+struct View savedView;
+struct View newView;
 
 // NOTE: there is no need to call the intuition locks,
 // because whole program is running in Disable()
@@ -133,6 +137,17 @@ int main(int argc, char *argv[])
 		struct Task *me = FindTask(NULL);
 		me->tc_Node.ln_Name = "AmigaSplash";
 	}
+
+	// save view lord position
+	savedView = IntuitionBase->ViewLord;
+
+	// install vblank interrupt handler
+	/* Set up the interrupt node */
+	VBlankInterrupt.is_Node.ln_Type = NT_INTERRUPT;
+	VBlankInterrupt.is_Node.ln_Pri  = 127; /* Priority: higher runs first (10 to 127 is safe) */
+	VBlankInterrupt.is_Node.ln_Name = "AmigaSplashVBlank";
+	VBlankInterrupt.is_Data = NULL;
+	VBlankInterrupt.is_Code = VBlankHandler;
 
 	// initialize empty color table
 	colors_zero[32].ColorIndex = -1;
@@ -270,6 +285,10 @@ int main(int argc, char *argv[])
 		LoadRGB4(&scr->ViewPort, cmap, cmap_size);
 	}
 
+	/* No need to disable interrups, already disabled */
+	/* Add our interrupt to the Level 3 (VBlank) chain! */
+	AddIntServer(INTB_VERTB, &VBlankInterrupt);
+
 	SetPointer(mywin, sprite_data, 0, 0, 0, 0);
 	DrawImage(mywin->RPort, &image, 0, 0);
 	ActivateWindow(mywin);
@@ -352,6 +371,14 @@ int main(int argc, char *argv[])
 	} else {
 		Delay(64);
 	}
+
+	// remove the interrupt handler
+	RemIntServer(INTB_VERTB, &VBlankInterrupt);
+
+	// reapply the ViewLord offset
+	IntuitionBase->ViewLord.DyOffset = newView.DyOffset;
+	IntuitionBase->ViewLord.DxOffset = newView.DxOffset;
+	RemakeDisplay();
 
 	// switch to WB screen and fade in
 	if (wbScreen) {
