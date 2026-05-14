@@ -9,6 +9,7 @@ LOG_ITEMS = $(BUILD_DIR)/log_items.inc
 LOG_DEFS = $(BUILD_DIR)/log_defs.inc
 
 OUTPUT = $(BUILD_DIR)/$(PROJ)
+OUTPUTD = $(BUILD_DIR)/$(PROJ)_debug
 #OUTPUT_ICON = $(OUTPUT).info
 OUTPUT_MAP = $(OUTPUT).map
 HOST_OUTPUT = $(shell wslpath -a -w $(OUTPUT))
@@ -89,6 +90,13 @@ OBJS = \
 .PHONY: all generate_version generate_log_items generate_log_defs
 
 all: $(OUTPUT)
+
+package:
+	@make clean
+	@make -j$(shell nproc)
+	@cp "$(OUTPUT)" "$(OUTPUTD)"
+	@make clean
+	@make NLOG=1 NDEBUG=1 DOSTRIP=1 -j$(shell nproc)
 
 dump:
 	@echo CC: $(CC)
