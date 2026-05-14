@@ -1,6 +1,6 @@
 # AmigaSplash
 
-This simple tool is indended to show splash screen during boot process from HDD. For now it supports only OCS/ECS graphics and no HAM modes.
+This simple tool is indended to show splash screen during boot process from HDD. For now it supports only OCS/ECS graphics. It supports displaying HAM6 images but only without fade in/out.
 
 ## Supported formats
  - `S:splash.wav`: stereo, mono, unsigned 8-bit. Length is limited to the Paula max audio buffer (131072 bytes).
@@ -16,7 +16,7 @@ This simple tool is indended to show splash screen during boot process from HDD.
  - Waits for audio to finish
  - Exits
 
-Note: program can be also exited by pressing ESC on keyboard.
+Program can be exited by pressing ESC on keyboard or launching `C:AmigaSplash signal` (sending C signal into process `AmigaSplash`).
 
 ## Installation
 Just copy the `AmigaSplash` somewhere into your system (e.g. `C:`) and then in the beginning of `S:startup-sequence` insert this line:
@@ -24,4 +24,6 @@ Just copy the `AmigaSplash` somewhere into your system (e.g. `C:`) and then in t
 Run >NIL: C:AmigaSplash >RAM:splash.log
 ```
 
-Program can be run with one parameter `C:AmigaSplash signal`. This will just find the running AmigaSplash task in the memory and sends break C signal into it. This makes possible to trigger end of the 'loading' by adding anywhere into `startup-sequence`.
+- You can do `C:AmigaSplash signal` later from `startup-sequence`. This command identifies the AmigaSplash process in memory and sends a C break signal to terminate it. Use this within your `startup-sequence` to define exactly when the splash screen should close.
+
+- Note that `IPref` will try to restart Workbench when it applies the overscan settings, so I recommend moving the `C:IPref` line to just before `LoadWB` is called in the `startup-sequence`.
